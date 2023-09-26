@@ -10,9 +10,7 @@ const SS_ID = "SS_ID";
 const SS = SpreadsheetApp.openById(SS_ID);
 const sheet = SS.getSheetByName('シート1');
 
-/**
- * POSTメソッド
- */
+// POSTメソッド
 function doPost(e) {
   const data = e.postData.getDataAsString();
   const req = JSON.parse(data);
@@ -21,12 +19,6 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify(res));
 }
 
-/**
- * Webhookリクエストハンドラ
- * Dialogflowから送信されてきた HTTPS POST Webhook リクエストを処理する関数
- * https://cloud.google.com/dialogflow/es/docs/fulfillment-webhook?hl=ja
- */
-//
 /* 
 お知らせ先のメールアドレス
 本応募のご本人の氏名（メールの宛先）
@@ -37,12 +29,8 @@ function doPost(e) {
 【ご確認】全日程が参加可能であることを確認しました
 【ご確認】個人情報の取り扱いについて
 */
-//  queryText = req.queryResult.queryText; // 追加
-//  any = req.queryResult.parameters['any']; // 追加
-//  let next_Input = sheet.getRange(2, 1).getValue();
 
-  /* 
-  if(queryText == "イベントへ申し込む") // 追加
+  if(queryText == "イベントへ申し込む")
   {
     const text = "申し込みありがとうございます。\n保護者様の氏名\n（漢字）を入力してください。";
     const res = {
@@ -360,36 +348,4 @@ else if(sheet.getRange(3, 3).getValue() == "2人以降も学年（小学、中�
   sheet.getRange(3, 2).setValue('');
 }
 
-}
-
-
-
-
-
-
-/*
-  const parameters = req.queryResult.parameters;
-  const text = parameters['location']['city'] + 'を' + GST2JST(parameters['date-time'], 'M月d日') + 'に' + parameters['Request'] + 'しました。';
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-*/
-
-/**
- * グリニッジ標準時(GST)を日本標準時(JST)に編集する
- * str_gst_date: '2021-02-20T12:00:00+09:00'
- * format: 'MM月dd日'
- */
-function GST2JST(str_gst_date, format = 'yyyy/MM/dd HH:hh:mm') {
-  const date = new Date(str_gst_date);
-  return Utilities.formatDate(date, 'JST', format);
 }
