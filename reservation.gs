@@ -95,7 +95,7 @@ function doPost(e) {
     ])
 
     // 未読防止の LINE への通知設定
-    const url = "https://maker.ifttt.com/trigger/contact_informed/with/key/ozfbzp7HX3YbcOgtN66O7M85hwQKxAus3V5l3VfVLRb"
+    const url = "URL"
 
 
     const yyyymmdd = new Intl.DateTimeFormat(
