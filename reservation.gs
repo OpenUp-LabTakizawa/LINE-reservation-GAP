@@ -1,14 +1,16 @@
-// チャネルアクセストークン
-const ACCESS_TOKEN = "ACCESS_TOKEN";
-const HEADERS = {
-  "Content-Type": "application/json; charset=UTF-8",
-  "Authorization": "Bearer " + ACCESS_TOKEN
-};
-
 // Googleスプレッドシート
 const SS_ID = "SS_ID";
 const SS = SpreadsheetApp.openById(SS_ID);
-const sheet = SS.getSheetByName('シート1');
+
+// Sheet名を一覧取得
+const originSheet = SS.getSheetByName("シート名登録");
+const lineName = originSheet.getRange("B3").getValue();
+const alertName = originSheet.getRange("C3").getValue();
+const quiryName = originSheet.getRange("D3").getValue();
+
+const sheetLine = SS.getSheetByName(lineName);
+const sheetAlert = SS.getSheetByName(alertName);
+const sheetQuiry = SS.getSheetByName(quiryName);
 
 /**
  * POSTメソッド
@@ -16,380 +18,119 @@ const sheet = SS.getSheetByName('シート1');
 function doPost(e) {
   const data = e.postData.getDataAsString();
   const req = JSON.parse(data);
-  const res = handleWebhook(req);
+
+  // reqの中身から
+  // 抽選応募受付(reservation-followup)か
+  // 次回開催お知らせ希望(nexteventalert-followup)かを判断
+  const outputs = req.queryResult.outputContexts;
+
+  // 抽選応募受付(reservation-followup)の時
+  if (outputs.find(output => output.name.includes("reservation-followup")) != undefined) {
+    const queryParameters = req.queryResult["outputContexts"].find(output => output.name.includes("reservation-followup")).parameters;
+    const date = new Date();
+    const PrivacyPolicy = queryParameters.PrivacyPolicy;
+    const EventCondition = queryParameters.EventCondition;
+    const ChildCount = queryParameters.ChildCount;
+    const ChildName = queryParameters.ChildName;
+    const ChildGrade = queryParameters.ChildGrade;
+    const ParentName = queryParameters.ParentName;
+    const Mail = queryParameters.Mail;
+    const NextEvent = queryParameters.NextEvent;
+    const Other = queryParameters.Other;
+
+    // 「2023/10_LINE」のスプレッドシートに吐き出す
+    sheetLine.appendRow([
+      "",
+      date,
+      PrivacyPolicy,
+      EventCondition,
+      ChildCount,
+      ChildName,
+      ChildGrade,
+      ParentName,
+      Mail,
+      NextEvent,
+      Other
+    ])
+
+    if (NextEvent == "希望する") {
+      // 「2023/10_LINE_次回開催お知らせ希望」のスプレッドシートに吐き出す
+      sheetAlert.appendRow([
+        "",
+        date,
+        PrivacyPolicy,
+        ParentName,
+        Mail,
+        NextEvent
+      ])
+    }
+
+    // 次回開催お知らせ希望(nexteventalert-followup)の時
+  } else if (outputs.find(output => output.name.includes("nexteventalert-followup")) != undefined) {
+    const queryParameters = req.queryResult["outputContexts"].find(output => output.name.includes("nexteventalert-followup")).parameters;
+    const date = new Date();
+    const PrivacyPolicy = queryParameters.PrivacyPolicy;
+    const AlertParentName = queryParameters.AlertParentName;
+    const AlertMail = queryParameters.AlertMail;
+    const NextEvent = "希望する";
+
+    // スプレッドシートに吐き出す
+    sheetAlert.appendRow([
+      "",
+      date,
+      PrivacyPolicy,
+      AlertParentName,
+      AlertMail,
+      NextEvent
+    ])
+    // お問い合わせ(300_contact-quiry-followup)の時
+  } else if (outputs.find(output => output.name.includes("300_contact-quiry-followup")) != undefined) {
+    const queryParameters = req.queryResult["outputContexts"].find(output => output.name.includes("followup")).parameters;
+    const date = new Date();
+    const inquiry = queryParameters.any;
+
+    sheetQuiry.appendRow([
+      date,
+      inquiry
+    ])
+
+    // 未読防止の LINE への通知設定
+    const url = "https://maker.ifttt.com/trigger/contact_informed/with/key/ozfbzp7HX3YbcOgtN66O7M85hwQKxAus3V5l3VfVLRb"
+
+
+    const yyyymmdd = new Intl.DateTimeFormat(
+      "ja-JA",
+      {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }
+    )
+
+    const data = {
+      "value1": yyyymmdd.format(date),
+      "value2": inquiry,
+    }
+    const headers = {
+      "Content-Type": "application/json"
+    }
+
+    const options = {
+      'method': 'post',
+      'headers': headers,
+      'payload': JSON.stringify(data)
+    }
+
+    UrlFetchApp.fetch(url, options)
+  } else {
+  }
+
+  const res = {
+
+  }
 
   return ContentService.createTextOutput(JSON.stringify(res));
-}
-
-/**
- * Webhookリクエストハンドラ
- * Dialogflowから送信されてきた HTTPS POST Webhook リクエストを処理する関数
- * https://cloud.google.com/dialogflow/es/docs/fulfillment-webhook?hl=ja
- */
-//
-/* 
-お知らせ先のメールアドレス
-本応募のご本人の氏名（メールの宛先）
-参加するお子様の氏名（漢字・ふりがな）と学年
-参加する保護者様の氏名（漢字・ふりがな）
-落選時の場合、次回の案内を要望しますか
-【ご確認】本イベントは抽選で、当選者が参加となります
-【ご確認】全日程が参加可能であることを確認しました
-【ご確認】個人情報の取り扱いについて
-*/
-//  queryText = req.queryResult.queryText; // 追加
-//  any = req.queryResult.parameters['any']; // 追加
-//  let next_Input = sheet.getRange(2, 1).getValue();
-
-  /* 
-  if(queryText == "イベントへ申し込む") // 追加
-  {
-    const text = "申し込みありがとうございます。\n保護者様の氏名\n（漢字）を入力してください。";
-    const res = {
-      "fulfillmentMessages": [
-        {
-          "text": {
-            "text": [
-              text
-            ]
-          }
-        }
-      ]
-    };
-
-    // next_Input = '保護者様の氏名（漢字）';
-    sheet.getRange(2, 1).setValue(2, 1).setValue('保護者様の氏名（漢字）');
-
-    return res;
-  } // 追加
-  else if(next_Input == '保護者様の氏名（漢字）') // 追加
-  {
-    const Guardians_name = any;
-    const text = Guardians_name + "さん\n入力ありがとうございます。\n保護者様の氏名\n（ふりがな）を入力してください。";
-    const res = {
-      "fulfillmentMessages": [
-        {
-          "text": {
-            "text": [
-              text
-            ]
-          }
-        }
-      ]
-    };
-
-    // next_Input = '保護者様の氏名（ふりがな）; 
-    // sheet.getRange(2, 1).setValue('保護者様の氏名（ふりがな）');
-    // sheet.getRange(4, 1).setValue(Guardians_name);
-
-    return res;
-  } // 追加
-  else if(next_Input == '保護者様の氏名（ふりがな）') // 追加
-  {
-    const Guardians_furigana = any;
-    const text = Guardians_furigana + "さん\n入力ありがとうございます。\nお住まいの市区町村\nを入力してください。";
-    const res = {
-      "fulfillmentMessages": [
-        {
-          "text": {
-            "text": [
-              text
-            ]
-          }
-        }
-      ]
-    };
-
-    // next_Input = 'お住まいの市区町村'; 
-    sheet.getRange(2, 1).setValue('お住まいの市区町村');
-    sheet.getRange(4, 2).setValue(Guardians_furigana);
-
-    return res;
-  } // 追加
-  else // 追加 */
-//  { // 追加
-
-function handleWebhook(req) {
-
-queryText = req.queryResult.queryText;
-
-if(queryText == "イベントへ申し込む" || queryText == "続けて2人以降も申し込む。")
-{
-  sheet.getRange(2, 1).setValue('お子様の氏名（漢字）を入力しますか。');
-}
-else if(queryText == "子供の氏名（漢字）を入力します。")
-{
-  sheet.getRange(3, 1).setValue('お子様の氏名（漢字）を入力します。');
-  sheet.getRange(2, 1).setValue('');
-}
-else if(queryText == "子供の氏名（ふりがな）を入力します。")
-{
-  sheet.getRange(3, 2).setValue('お子様の氏名（ふりがな）を入力します。');
-  sheet.getRange(2, 2).setValue('');
-    
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "子供の学年（小学、中学）を入力します。")
-{
-  sheet.getRange(3, 3).setValue('お子様の学年（小学、中学）を入力します。');
-  sheet.getRange(2, 3).setValue('');
-    
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "保護者の氏名（漢字）を入力します。")
-{
-  sheet.getRange(3, 4).setValue('保護者の氏名（漢字）を入力します。');
-  sheet.getRange(2, 4).setValue('');
-    
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue() + '\nお子様の学年（小学、中学）\n' + sheet.getRange(6, 3).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "保護者の氏名（ふりがな）を入力します。")
-{
-  sheet.getRange(3, 5).setValue('保護者の氏名（ふりがな）を入力します。');
-  sheet.getRange(2, 5).setValue('');
-
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue() + '\nお子様の学年（小学、中学）\n' + sheet.getRange(6, 3).getValue() + '\n保護者様の氏名（漢字）\n' + sheet.getRange(6, 4).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "住んでいる市区町村を入力します。")
-{
-  sheet.getRange(3, 6).setValue('住んでいる市区町村を入力します。');
-  sheet.getRange(2, 6).setValue('');
-
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue() + '\nお子様の学年（小学、中学）\n' + sheet.getRange(6, 3).getValue() + '\n保護者様の氏名（漢字）\n' + sheet.getRange(6, 4).getValue() + '\n保護者様の氏名（ふりがな）\n' + sheet.getRange(6, 5).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "連絡可能な携帯かメールを入力します。")
-{
-  sheet.getRange(3, 7).setValue('連絡可能な携帯かメールを入力します。');
-  sheet.getRange(2, 7).setValue('');
-
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue() + '\nお子様の学年（小学、中学）\n' + sheet.getRange(6, 3).getValue() + '\n保護者様の氏名（漢字）\n' + sheet.getRange(6, 4).getValue() + '\n保護者様の氏名（ふりがな）\n' + sheet.getRange(6, 5).getValue()  + '\nお住まいの市区町村\n' + sheet.getRange(6, 6).getValue();
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "次回以降の案内を希望します。" || queryText == "次回以降の案内を希望しません。")
-{
-  // sheet.getRange(3, 8).setValue('次回以降の案内を希望を入力します。');
-  sheet.getRange(2, 8).setValue('');
-
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 8).setValue(any);
-  sheet.getRange(2, 9).setValue('ご連絡事項を入力しますか。');
-  // sheet.getRange(3, 8).setValue('');
-}
-else if(queryText == "連絡事項を入力します。")
-{
-  sheet.getRange(3, 9).setValue('連絡事項を入力します。');
-  sheet.getRange(2, 9).setValue('');
-
-  const text = 'ここまでの入力内容です。\nお子様の氏名（漢字）\n' + sheet.getRange(6, 1).getValue() + '\nお子様の氏名（ふりがな）\n' + sheet.getRange(6, 2).getValue() + '\nお子様の学年（小学、中学）\n' + sheet.getRange(6, 3).getValue() + '\n保護者様の氏名（漢字）\n' + sheet.getRange(6, 4).getValue() + '\n保護者様の氏名（ふりがな）\n' + sheet.getRange(6, 5).getValue()  + '\nお住まいの市区町村\n' + sheet.getRange(6, 6).getValue() + '\n連絡可能な携帯かメール\n' + sheet.getRange(6, 7).getValue() + '\n次回以降の案内について\n' + sheet.getRange(6, 8).getValue();
-
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-}
-else if(queryText == "OKです。")
-{
-  sheet.appendRow([sheet.getRange(6, 1).getValue(), sheet.getRange(6, 2).getValue(), sheet.getRange(6, 3).getValue(), sheet.getRange(6, 4).getValue(), sheet.getRange(6, 5).getValue(), sheet.getRange(6, 6).getValue(), sheet.getRange(6, 7).getValue(), sheet.getRange(6, 8).getValue(), sheet.getRange(6, 9).getValue()]);
-
-  sheet.getRange(2, 1).setValue('OKです。');
-  sheet.getRange(2,10).setValue('10');
-  sheet.getRange(6, 1).setValue('1');
-  sheet.getRange(6, 2).setValue('2');
-  sheet.getRange(6, 3).setValue('3');
-  sheet.getRange(6, 4).setValue('4');
-  sheet.getRange(6, 5).setValue('5');
-  sheet.getRange(6, 6).setValue('6');
-  sheet.getRange(6, 7).setValue('7');
-  sheet.getRange(6, 8).setValue('8');
-  sheet.getRange(6, 9).setValue('9');
-}
-else if(sheet.getRange(3, 1).getValue() == "お子様の氏名（漢字）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 1).setValue(any);
-  sheet.getRange(2, 2).setValue('お子様の氏名（ふりがな）を入力しますか。');
-  sheet.getRange(3, 1).setValue(''); 
-}
-else if(sheet.getRange(3, 2).getValue() == "お子様の氏名（ふりがな）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 2).setValue(any);
-  sheet.getRange(2, 3).setValue('お子様の学年（小学、中学）を入力しますか。');
-  sheet.getRange(3, 2).setValue(''); 
-}
-else if(sheet.getRange(3, 3).getValue() == "お子様の学年（小学、中学）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 3).setValue(any);
-  sheet.getRange(2, 4).setValue('保護者の氏名（漢字）を入力しますか。');
-  sheet.getRange(3, 3).setValue(''); 
-}
-else if(sheet.getRange(3, 4).getValue() == "保護者の氏名（漢字）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 4).setValue(any);
-  sheet.getRange(2, 5).setValue('保護者の氏名（ふりがな）を入力しますか。');
-  sheet.getRange(3, 4).setValue(''); 
-}
-else if(sheet.getRange(3, 5).getValue() == "保護者の氏名（ふりがな）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 5).setValue(any);
-  sheet.getRange(2, 6).setValue('お住まいの市区町村を入力しますか。');
-  sheet.getRange(3, 5).setValue(''); 
-}
-else if(sheet.getRange(3, 6).getValue() == "住んでいる市区町村を入力します。")
-{
-  const location = req.queryResult.parameters['location']['city'];
-  sheet.getRange(6, 6).setValue(location);
-  sheet.getRange(2, 7).setValue('連絡可能な携帯かメールを入力しますか。');
-  sheet.getRange(3, 6).setValue(''); 
-}
-else if(sheet.getRange(3, 7).getValue() == "連絡可能な携帯かメールを入力します。")
-{
-  const any = String(req.queryResult.parameters['any']);
-  sheet.getRange(6, 7).setValue(any);
-  sheet.getRange(2, 8).setValue('次回以降の案内の希望を入力しますか。');
-  sheet.getRange(3, 7).setValue(''); 
-}
-else if(sheet.getRange(3, 9).getValue() == "連絡事項を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 9).setValue(any);
-  sheet.getRange(2,10).setValue('OKですか。');
-  sheet.getRange(3, 9).setValue(''); 
-}
-else if(sheet.getRange(3, 1).getValue() == '2人以降も氏名（漢字）を入力します。')
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 1).setValue(any);
-  sheet.getRange(2, 2).setValue('2人以降も氏名（ふりがな）を入力しますか。');
-  sheet.getRange(3, 1).setValue('');
-}
-else if(sheet.getRange(3, 2).getValue() == "2人以降も氏名（ふりがな）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 2).setValue(any);
-  sheet.getRange(2, 3).setValue('2人以降も学年（小学、中学）を入力しますか。');
-  sheet.getRange(3, 2).setValue('');
-}
-else if(sheet.getRange(3, 3).getValue() == "2人以降も学年（小学、中学）を入力します。")
-{
-  const any = req.queryResult.parameters['any'];
-  sheet.getRange(6, 2).setValue(any);
-  sheet.getRange(2,10).setValue('2人以降もOKですか。');
-  sheet.getRange(3, 2).setValue('');
-}
-
-}
-
-
-
-
-
-
-/*
-  const parameters = req.queryResult.parameters;
-  const text = parameters['location']['city'] + 'を' + GST2JST(parameters['date-time'], 'M月d日') + 'に' + parameters['Request'] + 'しました。';
-  const res = {
-    "fulfillmentMessages": [
-      {
-        "text": {
-          "text": [
-            text
-          ]
-        }
-      }
-    ]
-  };
-  return res;
-*/
-
-/**
- * グリニッジ標準時(GST)を日本標準時(JST)に編集する
- * str_gst_date: '2021-02-20T12:00:00+09:00'
- * format: 'MM月dd日'
- */
-function GST2JST(str_gst_date, format = 'yyyy/MM/dd HH:hh:mm') {
-  const date = new Date(str_gst_date);
-  return Utilities.formatDate(date, 'JST', format);
 }
